@@ -1,0 +1,275 @@
+---
+title: "p8105_hw3_ms6360"
+author: "Maisie Sun"
+date: "2022-10-08"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggridges)
+library(patchwork)
+library(ggplot2)
+library(readxl)
+```
+
+# Problem 1
+
+```{r}
+library(p8105.datasets)
+data("instacart")
+
+colnames(instacart)
+```
+
+*Write a short description of the dataset, noting the size and structure of the data, describing some key variables, and giving illstrative examples of observations.*
+
+* This dataset is called `instacart` and has `r nrow(instacart)` rows and `r ncol(instacart)` columns. 
+* Variables in this dataset (`r colnames(instacart)`) include information on items added to cart, their aisle location, and product type. 
+
+* Illstrative examples include histograms and bar plots:
+
+```{r}
+ggplot(instacart, aes(x = order_number)) + 
+  geom_histogram()
+
+ggplot(instacart, aes(x = aisle, y = order_number)) +
+  geom_bar(stat = "identity")
+```
+
+*How many aisles are there, and which aisles are the most items ordered from?*
+
+* There are `r nrow(distinct(instacart, aisle_id))` aisles and top 3 aisles for most items ordered from are fresh vegetables, fresh fruits, and packaged vegetables fruits. 
+
+```{r top_aisles}
+instacart %>%
+  select(aisle_id, aisle) %>% 
+  group_by(aisle) %>% 
+  summarise(n_product = n()) %>% 
+  arrange(desc(n_product))
+```
+
+*Make a plot that shows the number of items ordered in each aisle, limiting this to aisles with more than 10000 items ordered. Arrange aisles sensibly, and organize your plot so others can read it.*
+```{r aisles_graph}
+instacart %>%
+  group_by(aisle) %>%
+  summarize(n_product = n()) %>%
+  filter(n_product > 10000) %>%
+  mutate(aisle = reorder(aisle, -n_product)) %>% 
+  ggplot(aes(x = aisle, y = n_product)) +
+  geom_bar(stat = "identity")
+```
+
+*Make a table showing the three most popular items in each of the aisles “baking ingredients”, “dog food care”, and “packaged vegetables fruits”. Include the number of times each item is ordered in your table.*
+```{r products_in_aisles}
+instacart %>%
+  filter(aisle %in% c("baking ingredients", "dog food care", "packaged vegetables fruits")) %>%
+  group_by(aisle, product_name) %>%
+  summarize(product_n = n()) %>%
+  arrange(desc(product_n)) %>%
+  group_by(aisle) %>%
+  slice(1:3)
+```
+
+*Make a table showing the mean hour of the day at which Pink Lady Apples and Coffee Ice Cream are ordered on each day of the week; format this table for human readers (i.e. produce a 2 x 7 table).*
+```{r products_by_dow}
+instacart %>%
+  filter(product_name %in% c("Pink Lady Apples", "Coffee Ice Cream")) %>%
+  select(product_name, order_hour_of_day, order_dow) %>%
+  group_by(product_name, order_dow) %>%
+  summarize( 
+    mean_order = mean(order_hour_of_day)) %>%
+  mutate(order_dow = recode(order_dow, "0" = "Sunday", "1" = "Monday", "2" = "Tuesday", "3" = "Wednesday", "4" = "Thursday", "5" = "Friday", "6" = "Saturday")) %>%
+  pivot_wider(
+    names_from = "order_dow", 
+    values_from = "mean_order"
+  )
+```
+
+# Problem 2
+
+Import and clean the dataset
+
+*Load, tidy, and otherwise wrangle the data. Your final dataset should include all originally observed variables and values; have useful variable names; include a weekday vs weekend variable; and encode data with reasonable variable classes. Describe the resulting dataset (e.g. what variables exist, how many observations, etc).*
+```{r accel_import}
+accel = 
+  read_csv("./data/accel_data.csv") %>%
+    janitor::clean_names() %>%
+  mutate(
+    weekend_weekday = ifelse(day %in% c("Sunday", "Saturday"), "Weekend","Weekday"),
+    week = as.integer(week),
+    day_id = as.integer(day_id)) %>%
+  select(week, day_id, weekend_weekday, day, everything())
+```
+
+* There are `r nrow(accel)` rows and `r ncol(accel)` columns in this dataset. Variables include Day ID, Week Number, and Activities 1 to 1440.
+
+*Traditional analyses of accelerometer data focus on the total activity over the day. Using your tidied dataset, aggregate across minutes to create a total activity variable for each day, and create a table showing these totals. Are any trends apparent?*
+```{r total_activity}
+accel_activity =
+  accel %>%
+  mutate(
+    total_activity = rowSums(.[5:1444])) %>%
+  select(week, day_id, weekend_weekday, day, total_activity) %>%
+  mutate(day = factor(day, levels = c('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday','Friday', 'Saturday')))
+
+accel_activity
+
+ ggplot(accel_activity, aes(x = day, y = total_activity)) +
+  geom_bar(stat = "identity")
+```
+
+* According to the plot, there is least activity time on Saturday and most on Friday. The top 3 days with most activities are Wednesday, Thursday, and Friday.
+
+*Accelerometer data allows the inspection activity over the course of the day. Make a single-panel plot that shows the 24-hour activity time courses for each day and use color to indicate day of the week. Describe in words any patterns or conclusions you can make based on this graph.*
+```{r}
+accel %>%
+  pivot_longer(
+    activity_1:activity_1440,
+    names_to = "activity_time", 
+    values_to = "activity"
+  ) %>%
+   mutate(day = factor(day, levels = c('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday','Friday', 'Saturday'))) %>%
+  ggplot(aes(x = activity_time, y = activity, color = day)) + 
+  geom_point(alpha = 0.5) 
+```
+
+* 
+
+# Problem 3
+
+```{r import_noaa}
+library(p8105.datasets)
+data("ny_noaa")
+
+ny_noaa
+```
+
+*Write a short description of the dataset, noting the size and structure of the data, describing some key variables, and indicating the extent to which missing data is an issue.*
+
+* There are `r nrow(ny_noaa)` rows and `r ncol(ny_noaa)` columns. The data has information on precipitation, snow, and temperature. They are divided based on dates and weather station ID.
+
+* There are many rows where data is missing, especially for tmax and tmin.
+
+*Do some data cleaning. Create separate variables for year, month, and day. Ensure observations for temperature, precipitation, and snowfall are given in reasonable units. For snowfall, what are the most commonly observed values? Why?*
+
+```{r noaa_cleaning}
+clean_data = 
+  ny_noaa %>%
+  janitor::clean_names() %>%
+  separate(date, into = c("year", "month", "day"), sep = "-") %>%
+  mutate(
+    prcp = prcp/10,
+    tmax = as.numeric(tmax)/10,
+    tmin = as.numeric(tmin)/10,
+    month = recode(month, "01" = "January", "02" = "February", "03" = "March", "04" = "April", "05" = "May", "06" = "June", "07" = "July", "08" = "August", "09" = "September", "10" = "October", "11" = "November", "12" = "December"))
+```
+
+* Variables were converted into standard units. `prcp` was measured in tenths of mm and was converted into mm. `tmax` and `tmin` were measured in tenths of degrees C and were converted into degrees C.
+
+* For snowfall, it is measured in mm. The most common value is `r tail(sort(table(ny_noaa$snow)), 1)`
+
+*Make a two-panel plot showing the average max temperature in January and in July in each station across years. Is there any observable / interpretable structure? Any outliers?*
+
+```{r mean_tmax}
+panel_plot = 
+  clean_data %>%
+  select(id, year, month, day, tmax, tmin) %>%
+  filter(month == "January" | month == "July") %>%
+  group_by(id, year, month) %>%
+  summarize(
+    mean_tmax = mean(tmax, na.rm = TRUE)) %>%
+  drop_na(mean_tmax)
+
+jan_panel = 
+  panel_plot %>% 
+  filter(month == "January") %>%
+  ggplot(aes(x = year, y = mean_tmax)) + 
+  geom_point(aes(color = id), alpha = .5) + 
+  theme(legend.position = "none") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  labs(
+    title = "Mean max tempreture according to NY weather stations in January from 1991 to 2010",
+    x = "Mean max temperature (C)",
+    y = "Year") +
+  scale_y_continuous(
+    breaks = c(-20, -10, 0, 10, 20, 30), 
+    limits = c(-20, 30))
+
+july_panel = 
+  panel_plot %>% 
+  filter(month == "July") %>%
+  ggplot(aes(x = year, y = mean_tmax)) + 
+  geom_point(aes(color = id), alpha = .5) + 
+  theme(legend.position = "none") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  labs(
+    title = "Mean max tempreture according to NY weather stations in July from 1991 to 2010",
+    x = "Mean max temperature (C)",
+    y = "Year") +
+  scale_y_continuous(
+    breaks = c(-20, -10, 0, 10, 20, 30), 
+    limits = c(-20, 30))
+
+mean_max_temp = (jan_panel + july_panel)
+
+ggsave("result/mean_max_temp.pdf", mean_max_temp, width = 20, height = 10)
+
+knitr::opts_chunk$set(
+  fig.width = 20,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+```
+
+* Overall, the mean max temperature in July is a lot higher than January, which is expected. The mean max temperature for July across the years is `r panel_plot %>% filter(month == "July") %>% pull(mean_tmax) %>% mean()` while the mean max temperature for January across the years is `r panel_plot %>% filter(month == "January") %>% pull(mean_tmax) %>% mean()`. 
+
+* There is an outlier for weather station ID USC00308962, obervation on 1988, July. The mean max temperature was 13.95C, which is a lot lower than any other mean max temperatures.
+
+*Make a two-panel plot showing (i) tmax vs tmin for the full dataset (note that a scatterplot may not be the best option); and (ii) make a plot showing the distribution of snowfall values greater than 0 and less than 100 separately by year.*
+
+```{r tmax_tmin}
+tmax_tmin_jan =
+  clean_data %>%
+  filter(month == "January") %>%
+  ggplot(aes(x = tmax, y = tmin)) + 
+  geom_hex() +
+  theme(legend.position = "bottom") +
+    labs(
+      title = "Maximum vs minimum temperatures in January from 1991 to 2010 across all weather stations in the US",
+      x = "Max temperature (C)",
+      y = "Min temperature (C)") +
+  theme(legend.text = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  scale_x_continuous(
+    breaks = c(-30, -30, -10, 0, 10, 20, 30, 40, 50, 60), 
+    limits = c(-30, 65))
+  
+tmax_tmin_jul =
+  clean_data %>%
+  filter(month == "July") %>%
+  ggplot(aes(x = tmax, y = tmin)) + 
+  geom_hex() +
+  theme(legend.position = "bottom") +
+    labs(
+      title = "Maximum vs minimum temperatures in July from 1991 to 2010 across all weather stations in the US",
+      x = "Max temperature (C)",
+      y = "Min temperature (C)") +
+  theme(legend.text = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  scale_x_continuous(
+    breaks = c(-30, -30, -10, 0, 10, 20, 30, 40, 50, 60), 
+    limits = c(-30, 65))
+
+tmax_min = (tmax_tmin_jan + tmax_tmin_jul)
+
+ggsave("result/tmax_min.pdf", tmax_min, width = 20, height = 10)
+
+```
+
+```{r snowfall}
+
+```
+
+
+

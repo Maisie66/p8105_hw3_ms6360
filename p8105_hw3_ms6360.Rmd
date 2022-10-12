@@ -38,6 +38,8 @@ ggplot(instacart, aes(x = aisle, y = order_number)) +
   geom_bar(stat = "identity")
 ```
 
+*Why did you use these plots!!*
+
 *How many aisles are there, and which aisles are the most items ordered from?*
 
 * There are `r nrow(distinct(instacart, aisle_id))` aisles and top 3 aisles for most items ordered from are fresh vegetables, fresh fruits, and packaged vegetables fruits. 
@@ -46,7 +48,7 @@ ggplot(instacart, aes(x = aisle, y = order_number)) +
 instacart %>%
   select(aisle_id, aisle) %>% 
   group_by(aisle) %>% 
-  summarise(n_product = n()) %>% 
+  summarize(n_product = n()) %>% 
   arrange(desc(n_product))
 ```
 
@@ -58,7 +60,8 @@ instacart %>%
   filter(n_product > 10000) %>%
   mutate(aisle = reorder(aisle, -n_product)) %>% 
   ggplot(aes(x = aisle, y = n_product)) +
-  geom_bar(stat = "identity")
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 ```
 
 *Make a table showing the three most popular items in each of the aisles “baking ingredients”, “dog food care”, and “packaged vegetables fruits”. Include the number of times each item is ordered in your table.*
@@ -114,17 +117,20 @@ accel_activity =
   select(week, day_id, weekend_weekday, day, total_activity) %>%
   mutate(day = factor(day, levels = c('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday','Friday', 'Saturday')))
 
-accel_activity
-
  ggplot(accel_activity, aes(x = day, y = total_activity)) +
-  geom_bar(stat = "identity")
+   geom_bar(stat = "identity") + 
+   labs(
+    title = "Total activity by day",
+    x = "Day",
+    y = "Total Activity")
 ```
 
 * According to the plot, there is least activity time on Saturday and most on Friday. The top 3 days with most activities are Wednesday, Thursday, and Friday.
 
 *Accelerometer data allows the inspection activity over the course of the day. Make a single-panel plot that shows the 24-hour activity time courses for each day and use color to indicate day of the week. Describe in words any patterns or conclusions you can make based on this graph.*
 ```{r}
-accel %>%
+plot = 
+  accel %>%
   pivot_longer(
     activity_1:activity_1440,
     names_to = "activity_time", 
@@ -132,10 +138,19 @@ accel %>%
   ) %>%
    mutate(day = factor(day, levels = c('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday','Friday', 'Saturday'))) %>%
   ggplot(aes(x = activity_time, y = activity, color = day)) + 
-  geom_point(alpha = 0.5) 
+  geom_point(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+plot
+
+ggsave("result/plot.pdf", plot, width = 20, height = 10)
+
+
 ```
 
-* 
+*Show what is this plot showing (activity projectivies, colors of days of week)*
+*analysis: Friday morning / Sunday evening??*
+
 
 # Problem 3
 
@@ -268,7 +283,17 @@ ggsave("result/tmax_min.pdf", tmax_min, width = 20, height = 10)
 ```
 
 ```{r snowfall}
+snowfall =
+  clean_data %>%
+  select(id, year, snow) %>%
+  filter(snow > 0 & snow < 100) %>%
+  drop_na(snow) %>%
+  ggplot(aes(x = year, y = snow)) + 
+  geom_violin(aes(fill = year), alpha = .5) +
+  theme(legend.position = "none") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
+ggsave("result/snowfall.pdf", snowfall, width = 20, height = 10)
 ```
 
 

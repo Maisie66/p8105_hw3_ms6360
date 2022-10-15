@@ -1,7 +1,7 @@
 ---
 title: "p8105_hw3_ms6360"
 author: "Maisie Sun"
-date: "2022-10-08"
+date: "2022-10-15"
 output: github_document
 ---
 
@@ -10,13 +10,30 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggridges)
 library(patchwork)
-library(ggplot2)
 library(readxl)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
 ```
 
 # Problem 1
 
-```{r}
+```{r instacart_import}
 library(p8105.datasets)
 data("instacart")
 
@@ -26,25 +43,41 @@ colnames(instacart)
 *Write a short description of the dataset, noting the size and structure of the data, describing some key variables, and giving illstrative examples of observations.*
 
 * This dataset is called `instacart` and has `r nrow(instacart)` rows and `r ncol(instacart)` columns. 
+
 * Variables in this dataset (`r colnames(instacart)`) include information on items added to cart, their aisle location, and product type. 
+
+ANSWER
+
+This dataset contains `r nrow(instacart)` rows and `r ncol(instacart)` columns, with each row representing a single product from an instacart order. Variables include identifiers for user, order, and product; the order in which each product was added to the cart. There are several order-level variables, describing the day and time of the order, and number of days since prior order. Then there are several item-specific variables, describing the product name (e.g. Yogurt, Avocado), department (e.g. dairy and eggs, produce), and aisle (e.g. yogurt, fresh fruits), and whether the item has been ordered by this user in the past. 
 
 * Illstrative examples include histograms and bar plots:
 
-```{r}
-ggplot(instacart, aes(x = order_number)) + 
-  geom_histogram()
-
+```{r instacart_plots}
 ggplot(instacart, aes(x = aisle, y = order_number)) +
-  geom_bar(stat = "identity")
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+
+#ANSWER
+instacart %>% 
+  count(aisle) %>% 
+  filter(n > 10000) %>% 
+  mutate(aisle = fct_reorder(aisle, n)) %>% 
+  ggplot(aes(x = aisle, y = n)) + 
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
 ```
 
-*Why did you use these plots!!*
+* This plot shows the number of orders based on each aisles that has more than 1000 items.
 
 *How many aisles are there, and which aisles are the most items ordered from?*
 
 * There are `r nrow(distinct(instacart, aisle_id))` aisles and top 3 aisles for most items ordered from are fresh vegetables, fresh fruits, and packaged vegetables fruits. 
 
-```{r top_aisles}
+ANSWER
+
+In total, there are `r instacart %>% select(product_id) %>% distinct %>% count` products found in `r instacart %>% select(user_id, order_id) %>% distinct %>% count` orders from `r instacart %>% select(user_id) %>% distinct %>% count` distinct users.
+
+```{r top_aisles_info}
 instacart %>%
   select(aisle_id, aisle) %>% 
   group_by(aisle) %>% 
@@ -62,6 +95,17 @@ instacart %>%
   ggplot(aes(x = aisle, y = n_product)) +
   geom_bar(stat = "identity") + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+#ANSWER
+
+instacart %>% 
+  count(aisle) %>% 
+  filter(n > 10000) %>% 
+  mutate(aisle = fct_reorder(aisle, n)) %>% 
+  ggplot(aes(x = aisle, y = n)) + 
+  geom_point() + 
+  labs(title = "Number of items ordered in each aisle") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
 ```
 
 *Make a table showing the three most popular items in each of the aisles “baking ingredients”, “dog food care”, and “packaged vegetables fruits”. Include the number of times each item is ordered in your table.*
@@ -73,6 +117,17 @@ instacart %>%
   arrange(desc(product_n)) %>%
   group_by(aisle) %>%
   slice(1:3)
+
+#ANSWER
+
+instacart %>% 
+  filter(aisle %in% c("baking ingredients", "dog food care", "packaged vegetables fruits")) %>%
+  group_by(aisle) %>% 
+  count(product_name) %>% 
+  mutate(rank = min_rank(desc(n))) %>% 
+  filter(rank < 4) %>% 
+  arrange(desc(n)) %>%
+  knitr::kable()
 ```
 
 *Make a table showing the mean hour of the day at which Pink Lady Apples and Coffee Ice Cream are ordered on each day of the week; format this table for human readers (i.e. produce a 2 x 7 table).*
@@ -88,6 +143,15 @@ instacart %>%
     names_from = "order_dow", 
     values_from = "mean_order"
   )
+
+#ANSWER
+
+instacart %>%
+  filter(product_name %in% c("Pink Lady Apples", "Coffee Ice Cream")) %>%
+  group_by(product_name, order_dow) %>%
+  summarize(mean_hour = mean(order_hour_of_day)) %>%
+  spread(key = order_dow, value = mean_hour) %>%
+  knitr::kable(digits = 2)
 ```
 
 # Problem 2
@@ -103,54 +167,61 @@ accel =
     weekend_weekday = ifelse(day %in% c("Sunday", "Saturday"), "Weekend","Weekday"),
     week = as.integer(week),
     day_id = as.integer(day_id)) %>%
-  select(week, day_id, weekend_weekday, day, everything())
+  select(week, day_id, weekend_weekday, day, everything()) %>%
+  pivot_longer(
+    activity_1:activity_1440, 
+    names_to = "activity_min",
+    names_prefix = "activity_",
+    values_to = "activity")
+
 ```
 
-* There are `r nrow(accel)` rows and `r ncol(accel)` columns in this dataset. Variables include Day ID, Week Number, and Activities 1 to 1440.
+This dataset contains `r nrow(accel)` rows and `r ncol(accel)` columns, with each row representing a single actvity entry from a 63 year-old male with BMI 25, who was admitted to the Advanced Cardiac Care Center of Columbia University Medical Center and diagnosed with congestive heart failure (CHF). Variables include week number, day, activity time, and activity length. 
+
+There are several order-level variables, describing the week and day of the week of the activity. Then there are several character variables, such as the day of the week or whether it is a weekend or not. 
 
 *Traditional analyses of accelerometer data focus on the total activity over the day. Using your tidied dataset, aggregate across minutes to create a total activity variable for each day, and create a table showing these totals. Are any trends apparent?*
 ```{r total_activity}
 accel_activity =
   accel %>%
-  mutate(
-    total_activity = rowSums(.[5:1444])) %>%
-  select(week, day_id, weekend_weekday, day, total_activity) %>%
-  mutate(day = factor(day, levels = c('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday','Friday', 'Saturday')))
-
- ggplot(accel_activity, aes(x = day, y = total_activity)) +
-   geom_bar(stat = "identity") + 
-   labs(
-    title = "Total activity by day",
-    x = "Day",
-    y = "Total Activity")
+  mutate(day = factor(day, levels = c('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday','Friday', 'Saturday'))) %>%
+  group_by(day, week) %>% 
+  summarize(total_activity = sum(activity)) %>%
+  pivot_wider(names_from = day,
+              values_from = total_activity)
 ```
 
-* According to the plot, there is least activity time on Saturday and most on Friday. The top 3 days with most activities are Wednesday, Thursday, and Friday.
+* According to the table, the individual did not exercise on Saturday of week 4 and 5. His activity level on Sunday decreased throughout the weeks. His activity level is maintained and changes little for Tuesday, Wednesday, and Thursday. Monday and Friday activity levels differs slight throughout the weeks.
+
+* Total activity decreased at the beginning of the week (Sunday, Monday, Tuesday) and has a sharp increase on Wednesday, and high total activity level is maintained on Thursday and Friday. Saturday seems to be a rest day, where the total activity level lowers.
 
 *Accelerometer data allows the inspection activity over the course of the day. Make a single-panel plot that shows the 24-hour activity time courses for each day and use color to indicate day of the week. Describe in words any patterns or conclusions you can make based on this graph.*
-```{r}
-plot = 
+```{r accel_plot}
+activity_plot = 
   accel %>%
-  pivot_longer(
-    activity_1:activity_1440,
-    names_to = "activity_time", 
-    values_to = "activity"
-  ) %>%
-   mutate(day = factor(day, levels = c('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday','Friday', 'Saturday'))) %>%
-  ggplot(aes(x = activity_time, y = activity, color = day)) + 
+   mutate(day = factor(day, levels = c('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday','Friday', 'Saturday')),
+          activity_min = as.numeric(activity_min)) %>%
+  ggplot(aes(x = activity_min, y = activity, color = day)) + 
   geom_point(alpha = 0.5) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  scale_x_continuous(
+    breaks = c(120, 240, 360, 480, 600, 720, 840, 960, 1080, 1200, 1320, 1440),
+    limits = c(1, 1500)) +
+    labs(
+    title = "Total activity by day",
+    x = "Time of the day (min)",
+    y = "Total Activity Count")
 
-plot
+activity_plot
 
-ggsave("result/plot.pdf", plot, width = 20, height = 10)
-
-
+ggsave("result/activity_plot.pdf", activity_plot, width = 20, height = 10)
 ```
 
-*Show what is this plot showing (activity projectivies, colors of days of week)*
-*analysis: Friday morning / Sunday evening??*
+* This plot shows activity throughout the day in minutes and the amount of activity that the patient performed in that minute. I used a scatterplot to clearly show activity at different times of the day, separated by colors, representing each day of the week.
 
+* Overall, there is little activity in the first 6 hours of the day, mostly likely due to sleep. The same can be said for the last 4 hours of the day.
+
+* Throughout the week, morning activity happens on Thursday at 7am. On Friday, at 9am, and on Sunday at 11am. In the evening, activity happens on Saturday and Sunday at 5pm. From 8pm to 10pm, activity occurs on Monday, Wednesday, Thursday, Friday, and Saturday.
 
 # Problem 3
 
@@ -158,14 +229,36 @@ ggsave("result/plot.pdf", plot, width = 20, height = 10)
 library(p8105.datasets)
 data("ny_noaa")
 
-ny_noaa
+prcp_percent =
+  ny_noaa %>% 
+  filter(is.na(prcp)) %>% 
+  count/nrow(ny_noaa)*100
+snow_percent =
+  ny_noaa %>% 
+  filter(is.na(snow)) %>% 
+  count/nrow(ny_noaa)*100
+snwd_percent =
+  ny_noaa %>% 
+  filter(is.na(snwd)) %>% 
+  count/nrow(ny_noaa)*100
+tmax_percent =
+  ny_noaa %>% 
+  filter(is.na(tmax)) %>% 
+  count/nrow(ny_noaa)*100
+tmin_percent =
+  ny_noaa %>% 
+  filter(is.na(tmin)) %>% 
+  count/nrow(ny_noaa)*100
+
 ```
 
 *Write a short description of the dataset, noting the size and structure of the data, describing some key variables, and indicating the extent to which missing data is an issue.*
 
-* There are `r nrow(ny_noaa)` rows and `r ncol(ny_noaa)` columns. The data has information on precipitation, snow, and temperature. They are divided based on dates and weather station ID.
+This dataset contains `r nrow(ny_noaa)` rows and `r ncol(ny_noaa)` columns, with each row representing a single daily observation from a weather station in the US. Variables include station ID, date of observation, precipitation, snowfall, snow depth, max temperature and min temperature.
 
-* There are many rows where data is missing, especially for tmax and tmin.
+There are several variables that should be order-level, describing the date. there are also variables that should be numeric such as the observations (snowfall, snow depth, max temperature, and min temperature). There are also many rows where data is missing, especially for precipitation, seeing that only half of the stations report precipitation. 
+
+There are `r ny_noaa %>% filter(is.na(prcp)) %>% count` (`r round(prcp_percent, 2)`%) observations missing for precipitation. There are `r ny_noaa %>% filter(is.na(snow)) %>% count` (`r round(snow_percent, 2)`%) observations missing for snowfall There are `r ny_noaa %>% filter(is.na(snwd)) %>% count` (`r round(snwd_percent, 2)`%) observations missing for snow depth There are `r ny_noaa %>% filter(is.na(tmax)) %>% count` (`r round(tmax_percent, 2)`%) observations missing for max temperature There are `r ny_noaa %>% filter(is.na(tmin)) %>% count` (`r round(tmin_percent, 2)`%) observations missing for min temperature.
 
 *Do some data cleaning. Create separate variables for year, month, and day. Ensure observations for temperature, precipitation, and snowfall are given in reasonable units. For snowfall, what are the most commonly observed values? Why?*
 
@@ -229,46 +322,26 @@ july_panel =
 
 mean_max_temp = (jan_panel + july_panel)
 
-ggsave("result/mean_max_temp.pdf", mean_max_temp, width = 20, height = 10)
+mean_max_temp
 
-knitr::opts_chunk$set(
-  fig.width = 20,
-  fig.asp = .6,
-  out.width = "90%"
-)
+ggsave("result/mean_max_temp.pdf", mean_max_temp, width = 20, height = 10)
 
 ```
 
 * Overall, the mean max temperature in July is a lot higher than January, which is expected. The mean max temperature for July across the years is `r panel_plot %>% filter(month == "July") %>% pull(mean_tmax) %>% mean()` while the mean max temperature for January across the years is `r panel_plot %>% filter(month == "January") %>% pull(mean_tmax) %>% mean()`. 
 
-* There is an outlier for weather station ID USC00308962, obervation on 1988, July. The mean max temperature was 13.95C, which is a lot lower than any other mean max temperatures.
+* There seems to an outlier for weather station ID USC00308962, obervation on 1988, July. The mean max temperature was 13.95C, which is a lot lower than any other mean max temperatures.
 
 *Make a two-panel plot showing (i) tmax vs tmin for the full dataset (note that a scatterplot may not be the best option); and (ii) make a plot showing the distribution of snowfall values greater than 0 and less than 100 separately by year.*
 
-```{r tmax_tmin}
-tmax_tmin_jan =
+```{r tmax_tmin_snowfall_plot}
+tmax_tmin =
   clean_data %>%
-  filter(month == "January") %>%
   ggplot(aes(x = tmax, y = tmin)) + 
   geom_hex() +
   theme(legend.position = "bottom") +
     labs(
-      title = "Maximum vs minimum temperatures in January from 1991 to 2010 across all weather stations in the US",
-      x = "Max temperature (C)",
-      y = "Min temperature (C)") +
-  theme(legend.text = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-  scale_x_continuous(
-    breaks = c(-30, -30, -10, 0, 10, 20, 30, 40, 50, 60), 
-    limits = c(-30, 65))
-  
-tmax_tmin_jul =
-  clean_data %>%
-  filter(month == "July") %>%
-  ggplot(aes(x = tmax, y = tmin)) + 
-  geom_hex() +
-  theme(legend.position = "bottom") +
-    labs(
-      title = "Maximum vs minimum temperatures in July from 1991 to 2010 across all weather stations in the US",
+      title = "Maximum vs minimum temperatures from 1991 to 2010 across all weather stations in the US",
       x = "Max temperature (C)",
       y = "Min temperature (C)") +
   theme(legend.text = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
@@ -276,25 +349,23 @@ tmax_tmin_jul =
     breaks = c(-30, -30, -10, 0, 10, 20, 30, 40, 50, 60), 
     limits = c(-30, 65))
 
-tmax_min = (tmax_tmin_jan + tmax_tmin_jul)
-
-ggsave("result/tmax_min.pdf", tmax_min, width = 20, height = 10)
-
-```
-
-```{r snowfall}
 snowfall =
   clean_data %>%
   select(id, year, snow) %>%
   filter(snow > 0 & snow < 100) %>%
   drop_na(snow) %>%
   ggplot(aes(x = year, y = snow)) + 
-  geom_violin(aes(fill = year), alpha = .5) +
+  geom_boxplot() +
   theme(legend.position = "none") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
-ggsave("result/snowfall.pdf", snowfall, width = 20, height = 10)
+two_panel_plots = (tmax_tmin + snowfall)
+
+two_panel_plots
+
+ggsave("result/two_panel_plots.pdf", two_panel_plots, width = 20, height = 10)
 ```
+
 
 
 

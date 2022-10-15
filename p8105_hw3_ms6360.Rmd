@@ -354,10 +354,8 @@ snowfall =
   select(id, year, snow) %>%
   filter(snow > 0 & snow < 100) %>%
   drop_na(snow) %>%
-  ggplot(aes(x = year, y = snow)) + 
-  geom_boxplot() +
-  theme(legend.position = "none") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  ggplot(aes(x = snow, y = year)) + 
+  geom_density_ridges()
 
 two_panel_plots = (tmax_tmin + snowfall)
 
